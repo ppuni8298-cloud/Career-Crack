@@ -1,0 +1,616 @@
+// Prisma schema for Career Crack (PostgreSQL Production)
+// Use this schema when connecting to PostgreSQL (e.g., Vercel Postgres, Neon, Supabase, RDS)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String            @id @default(cuid())
+  email            String            @unique
+  name             String
+  passwordHash     String
+  role             String            @default("STUDENT")
+  isOnboarded      Boolean           @default(false)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  profile          UserProfile?
+  studyLogs        StudyLog[]
+  dailyTasks       DailyPlanTask[]
+  bookmarks        Bookmark[]
+  practiceSessions PracticeSession[]
+  mistakes         UserMistake[]
+  topicProgress    TopicProgress[]
+  challengeAttempts DailyChallengeAttempt[]
+  achievements     UserAchievement[]
+  mockTestAttempts MockTestAttempt[]
+
+  @@map("users")
+}
+
+model UserProfile {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goalCategory    String    @default("GOVERNMENT") // GOVERNMENT, STATE, PLACEMENTS, MULTIPLE
+  targetExam      String    @default("SSC CGL")
+  targetSubjects  String    @default("[]") // JSON array of subjects
+  dailyStudyHours String    @default("2-4 hours")
+  targetExamDate  DateTime?
+  readinessScore  Int       @default(35)
+  streakDays      Int       @default(1)
+  longestStreak   Int       @default(1)
+  lastActiveDate  String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("user_profiles")
+}
+
+model DailyPlanTask {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  subject     String
+  duration    String
+  isCompleted Boolean  @default(false)
+  date        String   // YYYY-MM-DD
+  createdAt   DateTime @default(now())
+
+  @@map("daily_plan_tasks")
+}
+
+model StudyLog {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action          String
+  score           String?
+  durationMinutes Int      @default(15)
+  createdAt       DateTime @default(now())
+
+  @@map("study_logs")
+}
+
+// -------------------------------------------------------------
+// Phase 2 Content Architecture & Scalable Question Bank
+// -------------------------------------------------------------
+
+model Exam {
+  id               String            @id @default(cuid())
+  name             String
+  slug             String            @unique
+  category         String            // "GOVERNMENT", "STATE_GOVERNMENT", "PLACEMENT"
+  description      String?
+  organization     String?           // e.g. "Staff Selection Commission", "UPSC"
+  state            String?           // e.g. "Karnataka", "Tamil Nadu"
+  active           Boolean           @default(true)
+  logo             String?
+  parentExamId     String?
+  parentExam       Exam?             @relation("ExamVariants", fields: [parentExamId], references: [id], onDelete: SetNull)
+  variants         Exam[]            @relation("ExamVariants")
+  examSubjects     ExamSubject[]
+  questions        Question[]
+  practiceSessions PracticeSession[]
+  dailyChallenges  DailyChallenge[]
+  mockTests        MockTest[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@index([category])
+  @@index([active])
+  @@map("exams")
+}
+
+model Subject {
+  id               String            @id @default(cuid())
+  name             String
+  slug             String            @unique
+  description      String?
+  category         String?           // "APTITUDE", "REASONING", "GENERAL", "CORE_CS", "LANGUAGE"
+  icon             String?
+  active           Boolean           @default(true)
+  examSubjects     ExamSubject[]
+  topics           Topic[]
+  questions        Question[]
+  practiceSessions PracticeSession[]
+  mockTestSections MockTestSection[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@index([active])
+  @@map("subjects")
+}
+
+model ExamSubject {
+  id        String   @id @default(cuid())
+  examId    String
+  subjectId String
+  order     Int      @default(0)
+  exam      Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([examId, subjectId])
+  @@index([examId])
+  @@index([subjectId])
+  @@map("exam_subjects")
+}
+
+model Topic {
+  id               String            @id @default(cuid())
+  subjectId        String
+  name             String
+  slug             String
+  description      String?
+  active           Boolean           @default(true)
+  order            Int               @default(0)
+  parentTopicId    String?
+  parentTopic      Topic?            @relation("SubTopics", fields: [parentTopicId], references: [id], onDelete: SetNull)
+  subTopics        Topic[]           @relation("SubTopics")
+  subject          Subject           @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  questions        Question[]
+  practiceSessions PracticeSession[]
+  topicProgress    TopicProgress[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@unique([subjectId, slug])
+  @@index([subjectId])
+  @@index([slug])
+  @@index([active])
+  @@map("topics")
+}
+
+model Question {
+  id                  String                    @id @default(cuid())
+  examId              String?
+  subjectId           String
+  topicId             String
+  questionText        String
+  questionType        String                    @default("MCQ_SINGLE") // MCQ_SINGLE, MCQ_MULTIPLE, TRUE_FALSE
+  sourceType          String                    @default("PRACTICE")   // PYQ, PRACTICE, AI_CHALLENGE
+  difficulty          String                    @default("MEDIUM")     // EASY, MEDIUM, HARD
+  explanation         String?
+  shortcut            String?
+  commonMistake       String?
+  concept             String?
+  expectedTimeSeconds Int                       @default(60)
+  marks               Float                     @default(1.0)
+  negativeMarks       Float                     @default(0.25)
+  active              Boolean                   @default(true)
+  verified            Boolean                   @default(false)
+  verificationStatus  String                    @default("UNVERIFIED") // UNVERIFIED, REVIEWED, VERIFIED
+  exam                Exam?                     @relation(fields: [examId], references: [id], onDelete: SetNull)
+  subject             Subject                   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  topic               Topic                     @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  options             QuestionOption[]
+  pyqMetadata         PYQMetadata?
+  tags                QuestionTag[]
+  bookmarks           Bookmark[]
+  sessionQuestions    PracticeSessionQuestion[]
+  mistakes            UserMistake[]
+  challengeQuestions  DailyChallengeQuestion[]
+  mockTestQuestions   MockTestQuestion[]
+  mockTestAnswers     MockTestAnswer[]
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+
+  @@index([examId])
+  @@index([subjectId])
+  @@index([topicId])
+  @@index([difficulty])
+  @@index([sourceType])
+  @@index([verified])
+  @@index([active])
+  @@index([createdAt])
+  @@map("questions")
+}
+
+model QuestionOption {
+  id                          String                    @id @default(cuid())
+  questionId                  String
+  optionKey                   String                    // "A", "B", "C", "D"
+  optionText                  String
+  order                       Int                       @default(0)
+  isCorrect                   Boolean                   @default(false)
+  question                    Question                  @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  selectedInPracticeQuestions PracticeSessionQuestion[]
+  mockTestAnswers             MockTestAnswer[]
+
+  @@index([questionId])
+  @@map("question_options")
+}
+
+model PYQMetadata {
+  id                 String   @id @default(cuid())
+  questionId         String   @unique
+  exam               String
+  examYear           Int
+  paper              String?
+  stage              String?
+  shift              String?
+  questionNumber     Int?
+  sourceReference    String?
+  verificationStatus String   @default("VERIFIED")
+  notes              String?
+  question           Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([exam])
+  @@index([examYear])
+  @@index([shift])
+  @@map("pyq_metadata")
+}
+
+model Tag {
+  id           String        @id @default(cuid())
+  name         String        @unique
+  slug         String        @unique
+  questionTags QuestionTag[]
+  createdAt    DateTime      @default(now())
+
+  @@map("tags")
+}
+
+model QuestionTag {
+  id         String   @id @default(cuid())
+  questionId String
+  tagId      String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  tag        Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, tagId])
+  @@index([questionId])
+  @@index([tagId])
+  @@map("question_tags")
+}
+
+model Bookmark {
+  id         String   @id @default(cuid())
+  userId     String
+  questionId String
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, questionId])
+  @@index([userId])
+  @@index([questionId])
+  @@map("bookmarks")
+}
+
+// -------------------------------------------------------------
+// Phase 3 Practice Engine & Interactive MCQ Models
+// -------------------------------------------------------------
+
+model PracticeSession {
+  id               String                    @id @default(cuid())
+  userId           String
+  examId           String?
+  subjectId        String?
+  topicId          String?
+  title            String                    @default("Practice Drill")
+  mode             String                    @default("TEST") // "LEARNING", "TEST"
+  difficulty       String                    @default("MIXED") // "EASY", "MEDIUM", "HARD", "MIXED"
+  sourceType       String                    @default("ALL") // "ALL", "PYQ", "PRACTICE"
+  totalQuestions   Int
+  durationSeconds  Int?                      // null for untimed
+  timeSpentSeconds Int                       @default(0)
+  status           String                    @default("IN_PROGRESS") // "IN_PROGRESS", "COMPLETED", "ABANDONED"
+  score            Float?
+  accuracy         Float?
+  correctCount     Int                       @default(0)
+  incorrectCount   Int                       @default(0)
+  skippedCount     Int                       @default(0)
+  startedAt        DateTime                  @default(now())
+  completedAt      DateTime?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+  user             User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exam             Exam?                     @relation(fields: [examId], references: [id], onDelete: SetNull)
+  subject          Subject?                  @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  topic            Topic?                    @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  sessionQuestions PracticeSessionQuestion[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("practice_sessions")
+}
+
+model PracticeSessionQuestion {
+  id                String          @id @default(cuid())
+  sessionId         String
+  questionId        String
+  questionOrder     Int             @default(1)
+  selectedOptionId  String?
+  selectedOptionKey String?         // "A", "B", "C", "D"
+  answerStatus      String          @default("UNANSWERED") // "UNANSWERED", "CORRECT", "INCORRECT", "SKIPPED"
+  timeSpentSeconds  Int             @default(0)
+  markedForReview   Boolean         @default(false)
+  isAnswered        Boolean         @default(false)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  session           PracticeSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  question          Question        @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  selectedOption    QuestionOption? @relation(fields: [selectedOptionId], references: [id], onDelete: SetNull)
+
+  @@unique([sessionId, questionId])
+  @@index([sessionId])
+  @@index([questionId])
+  @@index([answerStatus])
+  @@map("practice_session_questions")
+}
+
+model UserMistake {
+  id                String    @id @default(cuid())
+  userId            String
+  questionId        String
+  sessionId         String?
+  selectedOptionKey String?
+  correctOptionKey  String
+  reviewStatus      String    @default("UNRESOLVED") // "UNRESOLVED", "REVIEWED", "RESOLVED"
+  timesIncorrect    Int       @default(1)
+  lastAttemptedAt   DateTime  @default(now())
+  resolvedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question          Question  @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, questionId])
+  @@index([userId])
+  @@index([questionId])
+  @@index([reviewStatus])
+  @@map("user_mistakes")
+}
+
+// -------------------------------------------------------------
+// Phase 4 Analytics, Daily Challenges & Gamification Models
+// -------------------------------------------------------------
+
+model TopicProgress {
+  id                 String    @id @default(cuid())
+  userId             String
+  topicId            String
+  questionsAttempted Int       @default(0)
+  correctAnswers     Int       @default(0)
+  incorrectAnswers   Int       @default(0)
+  accuracy           Float     @default(0)
+  masteryStatus      String    @default("NOT_STARTED") // "NOT_STARTED", "PRACTICING", "IMPROVING", "STRONG"
+  lastPracticedAt    DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topic              Topic     @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, topicId])
+  @@index([userId])
+  @@index([topicId])
+  @@index([masteryStatus])
+  @@map("topic_progress")
+}
+
+model DailyChallenge {
+  id             String                   @id @default(cuid())
+  date           String                   @unique // "YYYY-MM-DD"
+  title          String                   @default("Daily Crack 10")
+  examId         String?
+  totalQuestions Int                      @default(10)
+  createdAt      DateTime                 @default(now())
+  exam           Exam?                    @relation(fields: [examId], references: [id], onDelete: SetNull)
+  questions      DailyChallengeQuestion[]
+  attempts       DailyChallengeAttempt[]
+
+  @@index([date])
+  @@map("daily_challenges")
+}
+
+model DailyChallengeQuestion {
+  id          String         @id @default(cuid())
+  challengeId String
+  questionId  String
+  order       Int            @default(1)
+  challenge   DailyChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  question    Question       @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([challengeId, questionId])
+  @@index([challengeId])
+  @@index([questionId])
+  @@map("daily_challenge_questions")
+}
+
+model DailyChallengeAttempt {
+  id               String         @id @default(cuid())
+  userId           String
+  challengeId      String
+  sessionId        String?
+  score            Float          @default(0)
+  accuracy         Float          @default(0)
+  correctCount     Int            @default(0)
+  incorrectCount   Int            @default(0)
+  timeSpentSeconds Int            @default(0)
+  completedAt      DateTime       @default(now())
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge        DailyChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, challengeId])
+  @@index([userId])
+  @@index([challengeId])
+  @@map("daily_challenge_attempts")
+}
+
+model Achievement {
+  id            String            @id @default(cuid())
+  code          String            @unique // e.g. "FIRST_PRACTICE", "QUESTION_STARTER"
+  title         String
+  description   String
+  category      String            @default("PRACTICE") // "PRACTICE", "ACCURACY", "STREAK", "MISTAKES"
+  icon          String            @default("🏆")
+  tier          String            @default("BRONZE") // "BRONZE", "SILVER", "GOLD"
+  criteriaType  String            // "SESSIONS_COUNT", "QUESTIONS_COUNT", "ACCURACY_PCT", "MISTAKES_REVIEWED", "STREAK_DAYS", "CHALLENGES_COUNT"
+  criteriaValue Int               @default(1)
+  createdAt     DateTime          @default(now())
+  userEarned    UserAchievement[]
+
+  @@map("achievements")
+}
+
+model UserAchievement {
+  id            String      @id @default(cuid())
+  userId        String
+  achievementId String
+  earnedAt      DateTime    @default(now())
+  notified      Boolean     @default(false)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, achievementId])
+  @@index([userId])
+  @@index([achievementId])
+  @@map("user_achievements")
+}
+
+// -------------------------------------------------------------
+// Phase 5 Full-Length Mock Test Engine Models
+// -------------------------------------------------------------
+
+model MockTest {
+  id                String            @id @default(cuid())
+  title             String
+  slug              String            @unique
+  examId            String
+  description       String?
+  mockType          String            @default("EXAM_SIMULATION") // "EXAM_SIMULATION", "PRACTICE_MOCK", "CUSTOM_MOCK"
+  difficulty        String            @default("MEDIUM")          // "EASY", "MEDIUM", "HARD"
+  totalQuestions    Int
+  durationSeconds   Int
+  totalMarks        Float
+  passingMarks      Float?
+  negativeMarks     Float             @default(0.5)
+  navigationRule    String            @default("FREE")            // "FREE", "SECTION_LOCKED"
+  isOfficialPattern Boolean           @default(true)
+  disclaimer        String?
+  status            String            @default("PUBLISHED")       // "PUBLISHED", "DRAFT", "ARCHIVED"
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  exam              Exam              @relation(fields: [examId], references: [id], onDelete: Cascade)
+  sections          MockTestSection[]
+  questions         MockTestQuestion[]
+  attempts          MockTestAttempt[]
+
+  @@index([examId])
+  @@index([slug])
+  @@index([mockType])
+  @@index([status])
+  @@map("mock_tests")
+}
+
+model MockTestSection {
+  id                String             @id @default(cuid())
+  mockTestId        String
+  title             String
+  sectionOrder      Int                @default(1)
+  questionCount     Int
+  marksPerQuestion  Float              @default(2.0)
+  negativeMarks     Float              @default(0.5)
+  durationSeconds   Int?
+  instructions      String?
+  subjectId         String?
+
+  mockTest          MockTest           @relation(fields: [mockTestId], references: [id], onDelete: Cascade)
+  subject           Subject?           @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  questions         MockTestQuestion[]
+  answers           MockTestAnswer[]
+
+  @@index([mockTestId])
+  @@index([subjectId])
+  @@map("mock_test_sections")
+}
+
+model MockTestQuestion {
+  id            String          @id @default(cuid())
+  mockTestId    String
+  sectionId     String
+  questionId    String
+  questionOrder Int             @default(1)
+  marks         Float           @default(2.0)
+  negativeMarks Float           @default(0.5)
+
+  mockTest      MockTest        @relation(fields: [mockTestId], references: [id], onDelete: Cascade)
+  section       MockTestSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  question      Question        @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([mockTestId, questionId])
+  @@index([mockTestId])
+  @@index([sectionId])
+  @@index([questionId])
+  @@map("mock_test_questions")
+}
+
+model MockTestAttempt {
+  id                 String           @id @default(cuid())
+  userId             String
+  mockTestId         String
+  status             String           @default("IN_PROGRESS") // "IN_PROGRESS", "COMPLETED", "ABANDONED", "EXPIRED"
+  startedAt          DateTime         @default(now())
+  completedAt        DateTime?
+  durationSeconds    Int
+  score              Float            @default(0)
+  accuracy           Float            @default(0)
+  correctCount       Int              @default(0)
+  incorrectCount     Int              @default(0)
+  skippedCount       Int              @default(0)
+  timeSpentSeconds   Int              @default(0)
+  currentSectionId   String?
+  currentQuestionId  String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  user               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mockTest           MockTest         @relation(fields: [mockTestId], references: [id], onDelete: Cascade)
+  answers            MockTestAnswer[]
+
+  @@index([userId])
+  @@index([mockTestId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("mock_test_attempts")
+}
+
+model MockTestAnswer {
+  id                String          @id @default(cuid())
+  attemptId         String
+  questionId        String
+  sectionId         String
+  selectedOptionId  String?
+  selectedOptionKey String?         // "A", "B", "C", "D"
+  answerStatus      String          @default("UNANSWERED") // "UNANSWERED", "ANSWERED", "CORRECT", "INCORRECT", "SKIPPED"
+  timeSpentSeconds  Int             @default(0)
+  markedForReview   Boolean         @default(false)
+  isVisited         Boolean         @default(false)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  attempt           MockTestAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question          Question        @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  section           MockTestSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  selectedOption    QuestionOption? @relation(fields: [selectedOptionId], references: [id], onDelete: SetNull)
+
+  @@unique([attemptId, questionId])
+  @@index([attemptId])
+  @@index([questionId])
+  @@index([sectionId])
+  @@index([answerStatus])
+  @@map("mock_test_answers")
+}
