@@ -41,6 +41,7 @@ export async function POST(req: NextRequest) {
       email: user.email,
       name: user.name,
       isOnboarded: user.isOnboarded,
+      role: user.role,
     });
 
     const response = NextResponse.json({
@@ -49,6 +50,7 @@ export async function POST(req: NextRequest) {
         id: user.id,
         name: user.name,
         email: user.email,
+        role: user.role,
         isOnboarded: user.isOnboarded,
       },
     });

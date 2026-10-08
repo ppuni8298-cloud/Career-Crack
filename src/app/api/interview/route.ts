@@ -134,16 +134,19 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    const initialQData = {
+      order: 1,
+      questionText: firstQ.question,
+      totalQuestions: initialQuestions.length,
+    };
+
     return NextResponse.json({
       success: true,
       sessionId: newSession.id,
       interviewType,
       topicOrRole: newSession.topicOrRole,
-      currentQuestion: {
-        order: 1,
-        questionText: firstQ.question,
-        totalQuestions: initialQuestions.length,
-      },
+      currentQuestion: initialQData,
+      firstQuestion: initialQData,
     });
   } catch (err: any) {
     console.error("POST /api/interview error:", err);

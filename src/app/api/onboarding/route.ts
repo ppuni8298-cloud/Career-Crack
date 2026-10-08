@@ -125,6 +125,7 @@ export async function POST(req: NextRequest) {
       email: updatedUser.email,
       name: updatedUser.name,
       isOnboarded: true,
+      role: updatedUser.role,
     });
 
     const response = NextResponse.json({

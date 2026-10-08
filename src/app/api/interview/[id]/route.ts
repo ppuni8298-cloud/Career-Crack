@@ -116,7 +116,7 @@ export async function POST(
       return NextResponse.json({ error: "Interview ID is required" }, { status: 400 });
     }
 
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
     const { answer } = body;
 
     if (!answer || typeof answer !== "string" || !answer.trim()) {

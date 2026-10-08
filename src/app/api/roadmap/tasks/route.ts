@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
 
-    const { action, taskId, title, subject, duration, date } = await req.json();
+    const { action, taskId, title, subject, duration, date } = (await req.json().catch(() => ({}))) || {};
 
     if (action === "TOGGLE" && taskId) {
       const task = await prisma.dailyPlanTask.findUnique({ where: { id: taskId } });

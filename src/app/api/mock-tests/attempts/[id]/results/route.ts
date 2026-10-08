@@ -154,7 +154,7 @@ export async function GET(
         sectionId: mq.sectionId,
         sectionTitle: fullAttempt.mockTest.sections.find((s: any) => s.id === mq.sectionId)?.title || "Section",
         topicName: q.topic?.name || "General",
-        text: q.text,
+        text: q.questionText || q.text,
         difficulty: q.difficulty,
         marks: mq.marks,
         negativeMarks: mq.negativeMarks,

@@ -9,7 +9,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
 
-    const { targetExam, targetExamDate, dailyStudyHours, goalCategory, targetSubjects } = await req.json();
+    const { targetExam, targetExamDate, dailyStudyHours, goalCategory, targetSubjects } =
+      (await req.json().catch(() => ({}))) || {};
 
     const updatedProfile = await prisma.userProfile.upsert({
       where: { userId: session.userId },

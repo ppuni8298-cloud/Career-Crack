@@ -14,6 +14,7 @@ export interface SessionPayload {
   email: string;
   name: string;
   isOnboarded: boolean;
+  role?: string;
 }
 
 export async function hashPassword(password: string): Promise<string> {

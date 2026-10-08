@@ -43,7 +43,7 @@ export async function PUT(req: NextRequest) {
     }
 
     const { emailReminders, dailyTaskAlerts, revisionDueAlerts, studyGroupAlerts, reminderTime } =
-      await req.json();
+      (await req.json().catch(() => ({}))) || {};
 
     const updated = await prisma.notificationPreference.upsert({
       where: { userId: session.userId },

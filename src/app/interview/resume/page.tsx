@@ -64,8 +64,9 @@ Projects: E-Commerce Microservice API with Stripe webhook reconciliation and ide
       if (res.ok) {
         const data = await res.json();
         setSessionId(data.sessionId);
-        setCurrentQuestion(data.firstQuestion.questionText);
-        setCurrentTurnOrder(data.firstQuestion.order);
+        const initialQ = data.currentQuestion || data.firstQuestion;
+        setCurrentQuestion(initialQ?.questionText || "");
+        setCurrentTurnOrder(initialQ?.order || 1);
       } else {
         alert("Failed to initialize resume interview.");
       }

@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
 
-    const { name, description, targetExam } = await req.json();
+    const { name, description, targetExam } = (await req.json().catch(() => ({}))) || {};
     if (!name || !name.trim()) {
       return NextResponse.json({ error: "Group name is required" }, { status: 400 });
     }

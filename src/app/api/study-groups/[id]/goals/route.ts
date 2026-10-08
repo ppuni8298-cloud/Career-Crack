@@ -13,7 +13,7 @@ export async function POST(
     }
 
     const { id } = await params;
-    const { title, targetCount, subject, dueDate } = await req.json();
+    const { title, targetCount, subject, dueDate } = (await req.json().catch(() => ({}))) || {};
 
     if (!title || !title.trim()) {
       return NextResponse.json({ error: "Goal title is required" }, { status: 400 });

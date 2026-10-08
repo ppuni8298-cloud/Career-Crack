@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
 
-    const { message } = await req.json();
+    const { message } = (await req.json().catch(() => ({}))) || {};
     if (!message || typeof message !== "string" || !message.trim()) {
       return NextResponse.json({ error: "Message content is required" }, { status: 400 });
     }

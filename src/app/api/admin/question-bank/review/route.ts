@@ -1,8 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getSession } from "@/lib/auth";
+
+async function verifyAdmin() {
+  const session = await getSession();
+  if (!session) return { authorized: false, status: 401, error: "Unauthorized. Please sign in." };
+
+  if (session.role === "ADMIN") return { authorized: true, session };
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { role: true },
+  });
+
+  if (user?.role === "ADMIN") return { authorized: true, session };
+  return { authorized: false, status: 403, error: "Forbidden. Admin access required." };
+}
 
 export async function GET(req: NextRequest) {
   try {
+    const auth = await verifyAdmin();
+    if (!auth.authorized) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
+    }
+
     const { searchParams } = new URL(req.url);
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
     const limit = Math.min(50, Math.max(1, parseInt(searchParams.get("limit") || "20", 10)));
@@ -52,6 +73,11 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const auth = await verifyAdmin();
+    if (!auth.authorized) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
+    }
+
     const body = await req.json();
     const { questionId, action, reviewNotes, updatedData } = body;
 

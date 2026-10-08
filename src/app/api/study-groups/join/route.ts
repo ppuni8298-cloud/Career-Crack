@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
 
-    const { code } = await req.json();
+    const { code } = (await req.json().catch(() => ({}))) || {};
     if (!code || typeof code !== "string") {
       return NextResponse.json({ error: "Study group code is required" }, { status: 400 });
     }
